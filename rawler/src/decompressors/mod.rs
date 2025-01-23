@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1
 // Copyright 2021 Daniel Vogelbacher <daniel@chaospixel.com>
 
-pub mod crx;
-pub mod ljpeg;
-pub mod radc;
+#[cfg(feature="crx")] pub mod crx;
+#[cfg(feature="ljpeg")] pub mod ljpeg;
+#[cfg(feature="radc")] pub mod radc;

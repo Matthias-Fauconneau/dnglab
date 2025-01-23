@@ -2,7 +2,7 @@ use crate::bits::Endian;
 use crate::bits::*;
 use crate::buffer::PaddedBuf;
 use crate::decoders::*;
-use crate::decompressors::ljpeg::LjpegDecompressor;
+#[cfg(feature="ljpeg")] use crate::decompressors::ljpeg::LjpegDecompressor;
 use crate::packed::*;
 
 pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
@@ -53,8 +53,8 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
     18 => Ok(RawImageData::Integer(decode_16le(data, width, height, false).into_inner())),
     19 => Ok(RawImageData::Integer(decode_16le_skiplines(data, width, height, false).into_inner())),
     20 => Ok(RawImageData::Integer(decode_16be(data, width, height, false).into_inner())),
-    21 => Ok(RawImageData::Integer(arw::ArwDecoder::decode_arw1(data, width, height, false).into_inner())),
-    22 => {
+    #[cfg(feature="orf")] 21 => Ok(RawImageData::Integer(arw::ArwDecoder::decode_arw1(data, width, height, false).into_inner())),
+    #[cfg(feature="orf")] 22 => {
       let mut curve: [usize; 6] = [0, 0, 0, 0, 0, 4095];
       for i in 0..4 {
         curve[i + 1] = (LEu16(data, i * 2) & 0xfff) as usize;
@@ -66,7 +66,7 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
         arw::ArwDecoder::decode_arw2(data, width, height, &curve, false).into_inner(),
       ))
     }
-    23 => {
+    #[cfg(feature="arw")] 23 => {
       let key = LEu32(data, 0);
       let length = LEu16(data, 4) as usize;
       let data = &data[10..];
@@ -78,26 +78,26 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
       let image_data = arw::ArwDecoder::sony_decrypt(data, 0, length, key)?;
       Ok(RawImageData::Integer(decode_16be(&image_data, width, height, false).into_inner()))
     }
-    24 => Ok(RawImageData::Integer(
+    #[cfg(feature="orf")] 24 => Ok(RawImageData::Integer(
       orf::OrfDecoder::decode_compressed(&buffer, width, height, false).into_inner(),
     )),
-    25 => {
+    #[cfg(feature="srw")] 25 => {
       let loffsets = data;
       let data = &data[height * 4..];
       Ok(RawImageData::Integer(
         srw::SrwDecoder::decode_srw1(data, loffsets, width, height, false).into_inner(),
       ))
     }
-    26 => Ok(RawImageData::Integer(srw::SrwDecoder::decode_srw2(data, width, height, false).into_inner())),
-    27 => Ok(RawImageData::Integer(srw::SrwDecoder::decode_srw3(data, width, height, false).into_inner())),
-    28 => Ok(RawImageData::Integer(kdc::KdcDecoder::decode_dc120(data, width, height, false).into_inner())),
-    29 => Ok(RawImageData::Integer(
+    #[cfg(feature="srw")] 26 => Ok(RawImageData::Integer(srw::SrwDecoder::decode_srw2(data, width, height, false).into_inner())),
+    #[cfg(feature="srw")] 27 => Ok(RawImageData::Integer(srw::SrwDecoder::decode_srw3(data, width, height, false).into_inner())),
+    #[cfg(feature="kdc")] 28 => Ok(RawImageData::Integer(kdc::KdcDecoder::decode_dc120(data, width, height, false).into_inner())),
+    #[cfg(feature="rw2")] 29 => Ok(RawImageData::Integer(
       rw2::v4decompressor::decode_panasonic_v4(data, width, height, false, false).into_inner(),
     )),
-    30 => Ok(RawImageData::Integer(
+    #[cfg(feature="rw2")] 30 => Ok(RawImageData::Integer(
       rw2::v4decompressor::decode_panasonic_v4(data, width, height, true, false).into_inner(),
     )),
-    31 => {
+    #[cfg(feature="dcr")] 31 => {
       let table = {
         let mut t = [0u16; 1024];
         for i in 0..1024 {
@@ -110,14 +110,14 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
         dcr::DcrDecoder::decode_kodak65000(data, &table, width, height, false).into_inner(),
       ))
     }
-    32 => decode_ljpeg(data, width, height, false, false),
-    33 => decode_ljpeg(data, width, height, false, true),
-    34 => decode_ljpeg(data, width, height, true, false),
-    35 => decode_ljpeg(data, width, height, true, true),
-    36 => Ok(RawImageData::Integer(
+    #[cfg(feature="ljpeg")] 32 => decode_ljpeg(data, width, height, false, false),
+    #[cfg(feature="ljpeg")] 33 => decode_ljpeg(data, width, height, false, true),
+    #[cfg(feature="ljpeg")] 34 => decode_ljpeg(data, width, height, true, false),
+    #[cfg(feature="ljpeg")] 35 => decode_ljpeg(data, width, height, true, true),
+    #[cfg(feature="pef")] 36 => Ok(RawImageData::Integer(
       pef::PefDecoder::do_decode(data, None, width, height, false).unwrap().into_inner(),
     )),
-    37 => {
+    #[cfg(feature="pef")] 37 => {
       let huff = data;
       let data = &data[64..];
       Ok(RawImageData::Integer(
@@ -126,7 +126,7 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
           .into_inner(),
       ))
     }
-    38 => {
+    #[cfg(feature="pef")] 38 => {
       let huff = data;
       let data = &data[64..];
       Ok(RawImageData::Integer(
@@ -135,36 +135,36 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
           .into_inner(),
       ))
     }
-    39 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 39 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, false, 0, width, height, false).into_inner(),
     )),
-    40 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 40 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, false, 1, width, height, false).into_inner(),
     )),
-    41 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 41 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, false, 2, width, height, false).into_inner(),
     )),
-    42 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 42 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, true, 0, width, height, false).into_inner(),
     )),
-    43 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 43 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, true, 1, width, height, false).into_inner(),
     )),
-    44 => Ok(RawImageData::Integer(
+    #[cfg(feature="crw")] 44 => Ok(RawImageData::Integer(
       crw::CrwDecoder::do_decode(file, true, 2, width, height, false).into_inner(),
     )),
-    45 => Ok(RawImageData::Integer(
+    #[cfg(feature="mos")] 45 => Ok(RawImageData::Integer(
       mos::MosDecoder::do_decode(data, false, width, height, false).unwrap().into_inner(),
     )),
-    46 => Ok(RawImageData::Integer(
+    #[cfg(feature="mos")] 46 => Ok(RawImageData::Integer(
       mos::MosDecoder::do_decode(data, true, width, height, false).unwrap().into_inner(),
     )),
     //47  => Ok(RawImageData::Integer(iiq::IiqDecoder::decode_compressed(data, height*4, 0, width, height, false).into_inner())),
-    48 => decode_nef(data, width, height, Endian::Little, 12),
-    49 => decode_nef(data, width, height, Endian::Little, 14),
-    50 => decode_nef(data, width, height, Endian::Big, 12),
-    51 => decode_nef(data, width, height, Endian::Big, 14),
-    52 => {
+    #[cfg(feature="nef")] 48 => decode_nef(data, width, height, Endian::Little, 12),
+    #[cfg(feature="nef")] 49 => decode_nef(data, width, height, Endian::Little, 14),
+    #[cfg(feature="nef")] 50 => decode_nef(data, width, height, Endian::Big, 12),
+    #[cfg(feature="nef")] 51 => decode_nef(data, width, height, Endian::Big, 14),
+    #[cfg(feature="nef")] 52 => {
       let coeffs = [LEf32(data, 0), LEf32(data, 4), LEf32(data, 8), LEf32(data, 12)];
       let data = PaddedBuf::new_owned(data[16..].to_vec(), data.len() - 16);
       Ok(RawImageData::Integer(
@@ -175,14 +175,14 @@ pub fn decode_unwrapped(file: &RawSource) -> Result<RawImageData> {
   }
 }
 
-fn decode_ljpeg(src: &[u8], width: usize, height: usize, dng_bug: bool, csfix: bool) -> Result<RawImageData> {
+#[cfg(feature="ljpeg")] fn decode_ljpeg(src: &[u8], width: usize, height: usize, dng_bug: bool, csfix: bool) -> Result<RawImageData> {
   let mut out = vec![0u16; width * height];
   let decompressor = LjpegDecompressor::new_full(src, dng_bug, csfix)?;
   decompressor.decode(&mut out, 0, width, width, height, false)?;
   Ok(RawImageData::Integer(out))
 }
 
-fn decode_nef(data: &[u8], width: usize, height: usize, endian: Endian, bps: usize) -> Result<RawImageData> {
+#[cfg(feature="nef")] fn decode_nef(data: &[u8], width: usize, height: usize, endian: Endian, bps: usize) -> Result<RawImageData> {
   let meta = data;
   let data = &data[4096..];
   Ok(RawImageData::Integer(

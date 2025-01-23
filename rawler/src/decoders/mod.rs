@@ -11,14 +11,12 @@ use std::panic;
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
+//use std::sync::Arc;
 use toml::Value;
 
 use crate::alloc_image_ok;
-use crate::analyze::FormatDump;
+//use crate::analyze::FormatDump;
 use crate::exif::Exif;
-use crate::formats::ciff;
-use crate::formats::jfif;
 use crate::formats::tiff::reader::TiffReader;
 use crate::formats::tiff::GenericTiffReader;
 use crate::formats::tiff::IFD;
@@ -27,12 +25,6 @@ use crate::pixarray::PixU16;
 use crate::rawsource::RawSource;
 use crate::tags::DngTag;
 use crate::Result;
-
-macro_rules! fetch_ciff_tag {
-  ($tiff:expr, $tag:expr) => {
-    $tiff.find_entry($tag).ok_or(format!("Couldn't find tag {}", stringify!($tag)).to_string())?
-  };
-}
 
 macro_rules! fetch_tiff_tag {
   ($ifd:expr, $tag:expr) => {
@@ -58,49 +50,51 @@ macro_rules! fetch_tiff_tag_variant {
   };
 }
 
-/*
-macro_rules! fetch_ifd {
+mod camera;
+
+#[cfg(test)] mod unwrapped;
+
+#[cfg(feature="ari")] pub mod ari;
+#[cfg(feature="arw")] pub mod arw;
+#[cfg(feature="cr2")] pub mod cr2;
+#[cfg(feature="cr3")] pub mod cr3;
+#[cfg(feature="crw")] pub mod crw;
+#[cfg(feature="dcr")] pub mod dcr;
+#[cfg(feature="dcs")] pub mod dcs;
+#[cfg(feature="dng")] pub mod dng;
+#[cfg(feature="erf")] pub mod erf;
+#[cfg(feature="iiq")] pub mod iiq;
+#[cfg(feature="kdc")] pub mod kdc;
+#[cfg(feature="mef")] pub mod mef;
+#[cfg(feature="mos")] pub mod mos;
+#[cfg(feature="mrw")] pub mod mrw;
+#[cfg(feature="nef")] pub mod nef;
+#[cfg(feature="nkd")] pub mod nkd;
+#[cfg(feature="nrw")] pub mod nrw;
+#[cfg(feature="orf")] pub mod orf;
+#[cfg(feature="pef")] pub mod pef;
+#[cfg(feature="qtk")] pub mod qtk;
+#[cfg(feature="raf")] pub mod raf;
+#[cfg(feature="rw2")] pub mod rw2;
+#[cfg(feature="srw")] pub mod srw;
+#[cfg(feature="tfr")] pub mod tfr;
+#[cfg(feature="x3f")] pub mod x3f;
+
+#[cfg(feature="jfif")] use crate::formats::jfif;
+
+#[cfg(feature="ciff")] use crate::formats::ciff;
+#[cfg(feature="ciff")] macro_rules! fetch_ciff_tag {
   ($tiff:expr, $tag:expr) => {
-    $tiff
-      .find_first_ifd($tag)
-      .ok_or(format!("Couldn't find ifd with tag {}", stringify!($tag)).to_string())?
+    $tiff.find_entry($tag).ok_or(format!("Couldn't find tag {}", stringify!($tag)).to_string())?
   };
 }
- */
 
-pub mod ari;
-pub mod arw;
-mod camera;
-pub mod cr2;
-pub mod cr3;
-pub mod crw;
-pub mod dcr;
-pub mod dcs;
-pub mod dng;
-pub mod erf;
-pub mod iiq;
-pub mod kdc;
-pub mod mef;
-pub mod mos;
-pub mod mrw;
-pub mod nef;
-pub mod nkd;
-pub mod nrw;
-pub mod orf;
-pub mod pef;
-pub mod qtk;
-pub mod raf;
-pub mod rw2;
-pub mod srw;
-pub mod tfr;
-mod unwrapped;
-pub mod x3f;
+#[cfg(feature="bmff")] use crate::formats::bmff::Bmff;
 
 pub use camera::Camera;
 
 use crate::alloc_image;
-use crate::formats::bmff::Bmff;
-use crate::tags::ExifTag;
+//use crate::tags::ExifTag;
 use crate::tags::TiffCommonTag;
 use crate::RawlerError;
 
@@ -130,7 +124,7 @@ pub struct RawDecodeParams {
   pub image_index: usize,
 }
 
-#[derive(Default, Debug, Clone)]
+/*#[derive(Default, Debug, Clone)]
 struct DecoderCache<T>
 where
   T: Default + Clone,
@@ -153,7 +147,7 @@ where
   fn set(&self, params: &RawDecodeParams, value: T) {
     self.cache.write().expect("DecoderCache is poisoned").insert(params.clone(), value);
   }
-}
+}*/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum WellKnownIFD {
@@ -223,7 +217,7 @@ impl RawMetadata {
     }
   }
 
-  pub(crate) fn new_with_lens(camera: &Camera, mut exif: Exif, lens: Option<LensDescription>) -> Self {
+  /*pub(crate) fn new_with_lens(camera: &Camera, mut exif: Exif, lens: Option<LensDescription>) -> Self {
     if let Some(lens) = &lens {
       exif.extend_from_lens(lens);
     }
@@ -235,7 +229,7 @@ impl RawMetadata {
       lens,
       rating: None,
     }
-  }
+  }*/
 }
 
 pub trait Decoder: Send {
@@ -270,7 +264,7 @@ pub trait Decoder: Send {
     Ok(None)
   }
 
-  fn format_dump(&self) -> FormatDump;
+  //fn format_dump(&self) -> FormatDump;
 
   fn ifd(&self, _wk_ifd: WellKnownIFD) -> Result<Option<Rc<IFD>>> {
     Ok(None)
@@ -487,32 +481,32 @@ impl RawLoader {
 
   /// Returns a decoder for a given buffer
   pub fn get_decoder<'b>(&'b self, rawfile: &RawSource) -> Result<Box<dyn Decoder + 'b>> {
-    if mrw::is_mrw(rawfile) {
+    #[cfg(feature="mrw")] if mrw::is_mrw(rawfile) {
       let dec = Box::new(mrw::MrwDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    if raf::is_raf(rawfile) {
+    #[cfg(feature="raf")] if raf::is_raf(rawfile) {
       let dec = Box::new(raf::RafDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    if ari::is_ari(rawfile) {
+    #[cfg(feature="ari")] if ari::is_ari(rawfile) {
       let dec = Box::new(ari::AriDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    if qtk::is_qtk(rawfile) {
+    #[cfg(feature="qtk")] if qtk::is_qtk(rawfile) {
       let dec = Box::new(qtk::QtkDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    if ciff::is_ciff(rawfile) {
+    #[cfg(feature="ciff")] if ciff::is_ciff(rawfile) {
       let dec = Box::new(crw::CrwDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    if jfif::is_exif(rawfile) {
+    #[cfg(feature="jfif")] if jfif::is_exif(rawfile) {
       let exif = jfif::Jfif::new(rawfile)?;
       if let Some(make) = exif
         .exif_ifd()
@@ -531,12 +525,12 @@ impl RawLoader {
       }
     }
 
-    if x3f::is_x3f(rawfile) {
+    #[cfg(feature="x3f")] if x3f::is_x3f(rawfile) {
       let dec = Box::new(x3f::X3fDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);
     }
 
-    match Bmff::new(&mut rawfile.reader()) {
+    #[cfg(feature="bmff")] match Bmff::new(&mut rawfile.reader()) {
       Ok(bmff) => {
         if bmff.compatible_brand("crx ") {
           return Ok(Box::new(cr3::Cr3Decoder::new(rawfile, bmff, self)?));
@@ -551,20 +545,14 @@ impl RawLoader {
       Ok(tiff) => {
         debug!("File is is TIFF file!");
 
-        macro_rules! use_decoder {
-          ($dec:ty, $buf:ident, $tiff:ident, $rawdec:ident) => {
-            Ok(Box::new(<$dec>::new(rawfile, $tiff, $rawdec)?) as Box<dyn Decoder>)
-          };
-        }
-
         if tiff.has_entry(DngTag::DNGVersion) {
-          return Ok(Box::new(dng::DngDecoder::new(rawfile, tiff, self)?));
+          return Ok(Box::new(dng::DngDecoder::new(rawfile, tiff, self)?) as Box<dyn Decoder>);
         }
 
         // The DCS560C is really a CR2 camera so we just special case it here
-        if let Some(model) = tiff.get_entry(TiffCommonTag::Model) {
+        #[cfg(feature="cr2")] if let Some(model) = tiff.get_entry(TiffCommonTag::Model) {
           if model.get_string().ok() == Some(&String::from("DCS560C")) {
-            return use_decoder!(cr2::Cr2Decoder, rawfile, tiff, self);
+            return Ok(Box::new(<cr2::Cr2Decoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>)
           }
         }
 
@@ -573,32 +561,31 @@ impl RawLoader {
           .and_then(|entry| entry.value.as_string().map(|s| s.as_str().trim_end()))
         {
           match make {
-            "Canon" => return use_decoder!(cr2::Cr2Decoder, rawfile, tiff, self),
-            "PENTAX" => return use_decoder!(pef::PefDecoder, rawfile, tiff, self),
-            "PENTAX Corporation" => return use_decoder!(pef::PefDecoder, rawfile, tiff, self),
-            "RICOH IMAGING COMPANY, LTD." => return use_decoder!(pef::PefDecoder, rawfile, tiff, self),
-            "Phase One" => return use_decoder!(iiq::IiqDecoder, rawfile, tiff, self),
-            "Phase One A/S" => return use_decoder!(iiq::IiqDecoder, rawfile, tiff, self),
-            "Leaf" => return use_decoder!(iiq::IiqDecoder, rawfile, tiff, self),
-            "Hasselblad" => return use_decoder!(tfr::TfrDecoder, rawfile, tiff, self),
-            "SONY" => return use_decoder!(arw::ArwDecoder, rawfile, tiff, self),
-            "Mamiya-OP Co.,Ltd." => return use_decoder!(mef::MefDecoder, rawfile, tiff, self),
-            "OLYMPUS IMAGING CORP." => return use_decoder!(orf::OrfDecoder, rawfile, tiff, self),
-            "OLYMPUS CORPORATION" => return use_decoder!(orf::OrfDecoder, rawfile, tiff, self),
-            "OLYMPUS OPTICAL CO.,LTD" => return use_decoder!(orf::OrfDecoder, rawfile, tiff, self),
-            "OM Digital Solutions" => return use_decoder!(orf::OrfDecoder, rawfile, tiff, self),
-            "SAMSUNG" => return use_decoder!(srw::SrwDecoder, rawfile, tiff, self),
-            "SEIKO EPSON CORP." => return use_decoder!(erf::ErfDecoder, rawfile, tiff, self),
-            "EASTMAN KODAK COMPANY" => return use_decoder!(kdc::KdcDecoder, rawfile, tiff, self),
-            "Eastman Kodak Company" => return use_decoder!(kdc::KdcDecoder, rawfile, tiff, self),
-            "KODAK" => return use_decoder!(dcs::DcsDecoder, rawfile, tiff, self),
-            "Kodak" => return use_decoder!(dcr::DcrDecoder, rawfile, tiff, self),
-            "Panasonic" => return use_decoder!(rw2::Rw2Decoder, rawfile, tiff, self),
-            "LEICA" => return use_decoder!(rw2::Rw2Decoder, rawfile, tiff, self),
-            "LEICA CAMERA AG" => return use_decoder!(rw2::Rw2Decoder, rawfile, tiff, self),
-            //"FUJIFILM" => return use_decoder!(raf::RafDecoder, rawfile, tiff, self),
-            "NIKON" => return use_decoder!(nrw::NrwDecoder, rawfile, tiff, self),
-            "NIKON CORPORATION" => return use_decoder!(nef::NefDecoder, rawfile, tiff, self),
+            #[cfg(feature="cr2")] "Canon" => return Ok(Box::new(<cr2::Cr2Decoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="pef")] "PENTAX" => return Ok(Box::new(<pef::PefDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="pef")] "PENTAX Corporation" => return Ok(Box::new(<pef::PefDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="pef")] "RICOH IMAGING COMPANY, LTD." => return Ok(Box::new(<pef::PefDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="iiq")] "Phase One" => return Ok(Box::new(<iiq::IiqDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="iiq")] "Phase One A/S" => return Ok(Box::new(<iiq::IiqDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="iiq")] "Leaf" => return Ok(Box::new(<iiq::IiqDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="tfr")] "Hasselblad" => return Ok(Box::new(<tfr::TfrDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="arw")] "SONY" => return Ok(Box::new(<arw::ArwDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="mef")] "Mamiya-OP Co.,Ltd." => return Ok(Box::new(<mef::MefDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="orf")] "OLYMPUS IMAGING CORP." => return Ok(Box::new(<orf::OrfDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="orf")] "OLYMPUS CORPORATION" => return Ok(Box::new(<orf::OrfDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="orf")] "OLYMPUS OPTICAL CO.,LTD" => return Ok(Box::new(<orf::OrfDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="orf")] "OM Digital Solutions" => return Ok(Box::new(<orf::OrfDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="srw")] "SAMSUNG" => return Ok(Box::new(<srw::SrwDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="erf")] "SEIKO EPSON CORP." => return Ok(Box::new(<erf::ErfDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="kdc")] "EASTMAN KODAK COMPANY" => return Ok(Box::new(<kdc::KdcDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="kdc")] "Eastman Kodak Company" => return Ok(Box::new(<kdc::KdcDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="dcs")] "KODAK" => return Ok(Box::new(<dcs::DcsDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="dcr")] "Kodak" => return Ok(Box::new(<dcr::DcrDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="rw2")] "Panasonic" => return Ok(Box::new(<rw2::Rw2Decoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="rw2")] "LEICA" => return Ok(Box::new(<rw2::Rw2Decoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="rw2")] "LEICA CAMERA AG" => return Ok(Box::new(<rw2::Rw2Decoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="nrw")] "NIKON" => return Ok(Box::new(<nrw::NrwDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
+            #[cfg(feature="nef")] "NIKON CORPORATION" => return Ok(Box::new(<nef::NefDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>),
             x => {
               return Err(RawlerError::Unsupported {
                 what: format!("Couldn't find a decoder for make \"{}\"", x),
@@ -613,10 +600,10 @@ impl RawLoader {
           }
         }
 
-        if tiff.has_entry(TiffCommonTag::Software) {
+        #[cfg(feature="mos")] if tiff.has_entry(TiffCommonTag::Software) {
           // Last ditch effort to identify Leaf cameras without Make and Model
           if fetch_tiff_tag!(tiff, TiffCommonTag::Software).as_string() == Some(&"Camera Library".to_string()) {
-            return use_decoder!(mos::MosDecoder, rawfile, tiff, self);
+            return Ok(Box::new(<mos::MosDecoder>::new(rawfile, tiff, self)?) as Box<dyn Decoder>);
           }
         }
       }
@@ -626,8 +613,7 @@ impl RawLoader {
     }
 
     // If all else fails see if we match by filesize to one of those CHDK style files
-    let data = rawfile.as_vec().unwrap();
-    if let Some(cam) = self.naked.get(&data.len()) {
+    #[cfg(feature="nkd")] if let Some(cam) = self.naked.get(&rawfile.as_vec().unwrap().len()) {
       return Ok(Box::new(nkd::NakedDecoder::new(cam.clone(), self)?));
     }
 
@@ -694,7 +680,7 @@ impl RawLoader {
   // Decodes an unwrapped input (just the image data with minimal metadata) into a RawImage
   // This is only useful for fuzzing really
   #[doc(hidden)]
-  pub fn decode_unwrapped(&self, rawfile: &RawSource) -> Result<RawImageData> {
+  #[cfg(test)] pub fn decode_unwrapped(&self, rawfile: &RawSource) -> Result<RawImageData> {
     match panic::catch_unwind(AssertUnwindSafe(|| unwrapped::decode_unwrapped(rawfile))) {
       Ok(val) => val,
       Err(_) => Err(RawlerError::DecoderFailed(format!("Caught a panic while decoding.{}", BUG))),

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   formats::tiff::{Rational, Result, SRational, Value, IFD},
-  lens::LensDescription,
+  //lens::LensDescription,
   tags::{ExifGpsTag, ExifTag},
 };
 
@@ -225,10 +225,10 @@ impl Exif {
     Ok(())
   }
 
-  pub(crate) fn extend_from_lens(&mut self, lens: &LensDescription) {
+  /*pub(crate) fn extend_from_lens(&mut self, lens: &LensDescription) {
     let lens_info: [Rational; 4] = [lens.focal_range[0], lens.focal_range[1], lens.aperture_range[0], lens.aperture_range[1]];
     self.lens_spec = Some(lens_info);
     self.lens_make = Some(lens.lens_make.clone());
     self.lens_model = Some(lens.lens_model.clone());
-  }
+  }*/
 }

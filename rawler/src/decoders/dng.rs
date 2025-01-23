@@ -6,12 +6,16 @@ use image::Rgb;
 
 use crate::alloc_image_ok;
 use crate::alloc_image_plain;
-use crate::bits::Endian;
+#[cfg(feature="packed")] use crate::bits::Endian;
 use crate::bits::LEu32;
 use crate::bits::LookupTable;
 use crate::cfa::*;
+use crate::Result;
+use crate::pixarray::PixU16;
+use crate::formats::tiff::IFD;
+use crate::RawSource;
 use crate::decoders::*;
-use crate::decompressors::ljpeg::*;
+#[cfg(feature="ljpeg")] use crate::decompressors::ljpeg::*;
 use crate::formats::tiff::Entry;
 use crate::formats::tiff::Rational;
 use crate::formats::tiff::Value;
@@ -20,7 +24,8 @@ use crate::imgop::xyz::Illuminant;
 use crate::imgop::Dim2;
 use crate::imgop::Point;
 use crate::imgop::Rect;
-use crate::packed::*;
+#[cfg(feature="packed")] use crate::packed::*;
+use crate::tags::ExifTag;
 use crate::tags::DngTag;
 use crate::tags::TiffCommonTag;
 use crate::RawImage;
@@ -53,8 +58,8 @@ impl<'a> Decoder for DngDecoder<'a> {
     let bits = fetch_tiff_tag!(raw, TiffCommonTag::BitsPerSample).force_u32(0);
 
     let mut image = match fetch_tiff_tag!(raw, TiffCommonTag::Compression).force_u32(0) {
-      1 => self.decode_uncompressed(file, raw, width * cpp, height, dummy)?,
-      7 => self.decode_compressed(file, raw, width * cpp, height, cpp, dummy)?,
+      #[cfg(feature="packed")] 1 => self.decode_uncompressed(file, raw, width * cpp, height, dummy)?,
+      #[cfg(feature="ljpeg")] 7 => self.decode_compressed(file, raw, width * cpp, height, cpp, dummy)?,
       c => return Err(RawlerError::DecoderFailed(format!("Don't know how to read DNGs with compression {}", c))),
     };
 
@@ -90,9 +95,9 @@ impl<'a> Decoder for DngDecoder<'a> {
     Ok(image)
   }
 
-  fn format_dump(&self) -> FormatDump {
+  /*fn format_dump(&self) -> FormatDump {
     FormatDump::Dng(DngFormat { tiff: self.tiff.clone() })
-  }
+  }*/
 
   fn raw_metadata(&self, _file: &RawSource, _params: &RawDecodeParams) -> Result<RawMetadata> {
     let raw = self.get_raw_ifd()?;
@@ -264,6 +269,7 @@ impl<'a> DngDecoder<'a> {
         !subsampled && (compression == 7 || compression == 1 || compression == 0x884c)
       })
       .collect::<Vec<&IFD>>();
+    assert_eq!(ifds.len(), 1);
     Ok(ifds[0])
   }
 
@@ -441,7 +447,7 @@ impl<'a> DngDecoder<'a> {
     Ok(result)
   }
 
-  pub fn decode_uncompressed(&self, file: &RawSource, raw: &IFD, width: usize, height: usize, dummy: bool) -> Result<PixU16> {
+  #[cfg(feature="packed")] pub fn decode_uncompressed(&self, file: &RawSource, raw: &IFD, width: usize, height: usize, dummy: bool) -> Result<PixU16> {
     let strips: Vec<&[u8]> = raw.strip_data_rawsource(file)?;
     let strips_continous: Vec<u8>;
     let src = if strips.len() == 1 {
@@ -479,7 +485,7 @@ impl<'a> DngDecoder<'a> {
     }
   }
 
-  pub fn decode_compressed(&self, file: &RawSource, raw: &IFD, width: usize, height: usize, cpp: usize, dummy: bool) -> Result<PixU16> {
+  #[cfg(feature="ljpeg")] pub fn decode_compressed(&self, file: &RawSource, raw: &IFD, width: usize, height: usize, cpp: usize, dummy: bool) -> Result<PixU16> {
     if let Some(offsets) = raw.get_entry(TiffCommonTag::StripOffsets) {
       // We're in a normal offset situation
       if offsets.count() != 1 {

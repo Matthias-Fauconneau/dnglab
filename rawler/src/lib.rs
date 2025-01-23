@@ -67,10 +67,9 @@
 use decoders::Camera;
 use decoders::Decoder;
 use decoders::RawDecodeParams;
-use formats::jfif::JfifError;
 use lazy_static::lazy_static;
 
-pub mod analyze;
+#[cfg(feature="analyze")] pub mod analyze;
 pub mod bitarray;
 pub mod bits;
 pub mod buffer;
@@ -78,14 +77,14 @@ pub mod cfa;
 pub mod decoders;
 pub mod decompressors;
 pub mod devtools;
-pub mod dng;
+#[cfg(feature="dng-writer")] pub mod dng;
 pub(crate) mod envparams;
 pub mod exif;
 pub mod formats;
 pub mod imgop;
 pub mod lens;
-pub mod ljpeg92;
-pub mod packed;
+#[cfg(feature="ljpeg92")] pub mod ljpeg92;
+#[cfg(feature="packed")] pub mod packed;
 pub mod pixarray;
 pub mod pumps;
 pub mod rawimage;
@@ -193,7 +192,8 @@ impl From<TiffError> for RawlerError {
   }
 }
 
-impl From<JfifError> for RawlerError {
+#[cfg(feature="jfif")] use formats::jfif::JfifError;
+#[cfg(feature="jfif")] impl From<JfifError> for RawlerError {
   fn from(err: JfifError) -> Self {
     Self::DecoderFailed(err.to_string())
   }
@@ -235,7 +235,7 @@ pub fn force_initialization() {
 // Used for fuzzing targets that just want to test the actual decoders instead of the full formats
 // with all their TIFF and other crazyness
 #[doc(hidden)]
-pub fn decode_unwrapped(rawfile: &RawSource) -> Result<RawImageData> {
+#[cfg(test)] pub fn decode_unwrapped(rawfile: &RawSource) -> Result<RawImageData> {
   LOADER.decode_unwrapped(rawfile)
 }
 
