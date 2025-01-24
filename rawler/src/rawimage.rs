@@ -217,8 +217,6 @@ pub struct RawImage {
   pub whitelevel: WhiteLevel,
   /// image blacklevels in RGBE order
   pub blacklevel: BlackLevel,
-  /// matrix to convert XYZ to camera RGBE
-  pub xyz_to_cam: [[f32; 3]; 4], // TODO: deprecated, use color_matrix
   /// Photometric interpretation
   pub photometric: RawPhotometricInterpretation,
   /// how much to crop the image to get all the usable (non-black) area
@@ -377,7 +375,6 @@ impl RawImage {
       data: RawImageData::Integer(image.into_inner()),
       blacklevel,
       whitelevel,
-      xyz_to_cam: cam.xyz_to_cam,
       photometric,
       active_area,
       crop_area,
@@ -491,112 +488,6 @@ impl RawImage {
 
   pub fn linearize(&self) -> Result<Self> {
     todo!()
-  }
-
-  /// Outputs the inverted matrix that converts pixels in the camera colorspace into
-  /// XYZ components.
-  pub fn cam_to_xyz(&self) -> [[f32; 4]; 3] {
-    self.pseudoinverse(self.xyz_to_cam)
-  }
-
-  /// Outputs the inverted matrix that converts pixels in the camera colorspace into
-  /// XYZ components normalized to be easily used to convert to Lab or a RGB output space
-  pub fn cam_to_xyz_normalized(&self) -> [[f32; 4]; 3] {
-    let mut xyz_to_cam = self.xyz_to_cam;
-    // Normalize xyz_to_cam so that xyz_to_cam * (1,1,1) is (1,1,1,1)
-    for i in 0..4 {
-      let mut num = 0.0;
-      for j in 0..3 {
-        num += xyz_to_cam[i][j];
-      }
-      for j in 0..3 {
-        xyz_to_cam[i][j] = if num == 0.0 { 0.0 } else { xyz_to_cam[i][j] / num };
-      }
-    }
-
-    self.pseudoinverse(xyz_to_cam)
-  }
-
-  /// Not all cameras encode a whitebalance so in those cases just using a 6500K neutral one
-  /// is a good compromise
-  pub fn neutralwb(&self) -> [f32; 4] {
-    let rgb_to_xyz = [
-      // sRGB D65
-      [0.412453, 0.357580, 0.180423],
-      [0.212671, 0.715160, 0.072169],
-      [0.019334, 0.119193, 0.950227],
-    ];
-
-    // Multiply RGB matrix
-    let mut rgb_to_cam = [[0.0; 3]; 4];
-    for i in 0..4 {
-      for j in 0..3 {
-        rgb_to_cam[i][j] = 0.0;
-        for k in 0..3 {
-          rgb_to_cam[i][j] += self.xyz_to_cam[i][k] * rgb_to_xyz[k][j];
-        }
-      }
-    }
-
-    let mut neutralwb = [0 as f32; 4];
-    for i in 0..4 {
-      let mut num = 0.0;
-      for j in 0..3 {
-        num += rgb_to_cam[i][j];
-      }
-      neutralwb[i] = 1.0 / num;
-    }
-
-    [
-      neutralwb[0] / neutralwb[1],
-      neutralwb[1] / neutralwb[1],
-      neutralwb[2] / neutralwb[1],
-      neutralwb[3] / neutralwb[1],
-    ]
-  }
-
-  fn pseudoinverse(&self, inm: [[f32; 3]; 4]) -> [[f32; 4]; 3] {
-    let mut temp: [[f32; 6]; 3] = [[0.0; 6]; 3];
-
-    for i in 0..3 {
-      for j in 0..6 {
-        temp[i][j] = if j == i + 3 { 1.0 } else { 0.0 };
-      }
-      for j in 0..3 {
-        for k in 0..4 {
-          temp[i][j] += inm[k][i] * inm[k][j];
-        }
-      }
-    }
-
-    for i in 0..3 {
-      let mut num = temp[i][i];
-      for j in 0..6 {
-        temp[i][j] /= num;
-      }
-      for k in 0..3 {
-        if k == i {
-          continue;
-        }
-        num = temp[k][i];
-        for j in 0..6 {
-          temp[k][j] -= temp[i][j] * num;
-        }
-      }
-    }
-
-    let mut out: [[f32; 4]; 3] = [[0.0; 4]; 3];
-
-    for i in 0..4 {
-      for j in 0..3 {
-        out[j][i] = 0.0;
-        for k in 0..3 {
-          out[j][i] += temp[j][k + 3] * inm[i][k];
-        }
-      }
-    }
-
-    out
   }
 
   /// Returns the CFA pattern after the crop has been applied (and thus the pattern

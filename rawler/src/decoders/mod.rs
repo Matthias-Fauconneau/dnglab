@@ -54,6 +54,8 @@ mod camera;
 
 #[cfg(test)] mod unwrapped;
 
+#[cfg(feature="dng")] pub mod dng;
+
 #[cfg(feature="ari")] pub mod ari;
 #[cfg(feature="arw")] pub mod arw;
 #[cfg(feature="cr2")] pub mod cr2;
@@ -61,7 +63,6 @@ mod camera;
 #[cfg(feature="crw")] pub mod crw;
 #[cfg(feature="dcr")] pub mod dcr;
 #[cfg(feature="dcs")] pub mod dcs;
-#[cfg(feature="dng")] pub mod dng;
 #[cfg(feature="erf")] pub mod erf;
 #[cfg(feature="iiq")] pub mod iiq;
 #[cfg(feature="kdc")] pub mod kdc;

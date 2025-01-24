@@ -307,6 +307,7 @@ impl<'a> DngDecoder<'a> {
 
     let linear = fetch_tiff_tag!(raw, TiffCommonTag::PhotometricInt).force_usize(0) == 34892;
     let cfa = if linear { CFA::default() } else { self.get_cfa(raw)? };
+    let forward_matrix = self.get_forward_matrix()?;
     let color_matrix = self.get_color_matrix()?;
     let real_bps = if raw.has_entry(TiffCommonTag::Linearization) {
       // If DNG contains linearization table, output is always 16 bits
@@ -325,7 +326,7 @@ impl<'a> DngDecoder<'a> {
       blacklevel: None,
       blackareah: None,
       blackareav: None,
-      xyz_to_cam: Default::default(),
+      forward_matrix,
       color_matrix,
       cfa,
       active_area,
@@ -424,6 +425,29 @@ impl<'a> DngDecoder<'a> {
     areas
   }
 
+  fn get_forward_matrix(&self) -> Result<HashMap<Illuminant, FlatColorMatrix>> {
+    let mut result = HashMap::new();
+
+    let mut read_matrix = |cal: DngTag, mat: DngTag| -> Result<()> {
+      if let Some(c) = self.tiff.get_entry(mat) {
+        let illuminant: Illuminant = fetch_tiff_tag!(self.tiff, cal).force_u16(0).try_into()?;
+        let mut matrix = FlatColorMatrix::new();
+        for i in 0..c.count() as usize {
+          matrix.push(c.force_f32(i));
+        }
+        assert!(matrix.len() <= 12 && !matrix.is_empty());
+        result.insert(illuminant, matrix);
+      }
+      Ok(())
+    };
+
+    read_matrix(DngTag::CalibrationIlluminant1, DngTag::ForwardMatrix1)?;
+    read_matrix(DngTag::CalibrationIlluminant2, DngTag::ForwardMatrix2)?;
+    // TODO: add 3
+
+    Ok(result)
+  }
+  
   fn get_color_matrix(&self) -> Result<HashMap<Illuminant, FlatColorMatrix>> {
     let mut result = HashMap::new();
 
